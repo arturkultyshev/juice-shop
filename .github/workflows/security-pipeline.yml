@@ -1,1 +1,66 @@
 
+name: Juice Shop CI Security Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build-and-security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Run lint (optional)
+        run: npm run lint --if-present
+        continue-on-error: true   
+
+      - name: Create reports directory
+        run: mkdir -p security-reports
+
+      - name: Run Semgrep (SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/default"
+      - name: Save Semgrep report
+        if: always()
+        run: |
+          mkdir -p security-reports
+          if [ -f semgrep.sarif ]; then
+            mv semgrep.sarif security-reports/semgrep.sarif
+          fi
+
+      - name: Run Gitleaks (SAST: secrets)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source . --report-path security-reports/gitleaks-report.json --report-format json
+
+      - name: Run OWASP Dependency-Check (SCA)
+        if: always()
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" \
+            -v "$PWD/security-reports:/report" \
+            owasp/dependency-check:latest \
+            --scan /src \
+            --format "HTML" --format "JSON" \
+            --out /report \
+            --project "JuiceShop-CI-Security"
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: security-reports
