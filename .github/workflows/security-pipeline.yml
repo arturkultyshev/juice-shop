@@ -41,7 +41,7 @@ jobs:
             mv semgrep.sarif security-reports/semgrep.sarif
           fi
 
-      - name: Run Gitleaks (SAST: secrets)
+      - name: Run Gitleaks (SAST:secrets)
         uses: gitleaks/gitleaks-action@v2
         with:
           args: detect --source . --report-path security-reports/gitleaks-report.json --report-format json
